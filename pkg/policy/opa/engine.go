@@ -251,18 +251,33 @@ func (e *Engine) CompileRegoFiles() error {
 	return nil
 }
 
+// severityProvider is implemented by pre load filters that carry a minimum
+// severity threshold for the violations to report. The check is done against
+// each violation's effective severity (after resource level overrides), and
+// therefore cannot be part of the policy loading stage.
+type severityProvider interface {
+	Severity() string
+}
+
 // Init initializes the Opa engine
 // Handles loading all rules, filtering, compiling, and preparing for evaluation
 func (e *Engine) Init(policyPath string, filter policy.PreLoadFilter) error {
 	e.context = context.Background()
 
+	// pick up the severity threshold, if the pre load filter carries one
+	if sp, ok := filter.(severityProvider); ok {
+		e.severity = sp.Severity()
+	}
+
 	if err := e.LoadRegoFiles(policyPath, filter); err != nil {
+		e.severity = ""
 		zap.S().Error("error loading rego files", zap.String("policy path", policyPath), zap.Error(err))
 		return ErrInitFailed
 	}
 
 	err := e.CompileRegoFiles()
 	if err != nil {
+		e.severity = ""
 		zap.S().Error("error compiling rego files", zap.String("policy path", policyPath), zap.Error(err))
 		return ErrInitFailed
 	}
@@ -317,24 +332,38 @@ func (e *Engine) reportViolation(regoData *policy.RegoData, resource *output.Res
 			violation.Severity = strings.ToUpper(resource.MaxSeverity)
 		}
 	}
-	if !isSkipped && !strings.EqualFold(resource.MaxSeverity, "none") {
-		severity := violation.Severity
-		if strings.ToLower(severity) == "high" {
-			e.results.ViolationStore.Summary.HighCount++
-		} else if strings.ToLower(severity) == "medium" {
-			e.results.ViolationStore.Summary.MediumCount++
-		} else if strings.ToLower(severity) == "low" {
-			e.results.ViolationStore.Summary.LowCount++
-		} else {
-			zap.S().Warn("invalid severity found in rule definition",
-				zap.String("rule id", violation.RuleID), zap.String("severity", severity))
-		}
-		e.results.ViolationStore.AddResult(&violation, false)
-		e.results.ViolationStore.Summary.ViolatedPolicies++
-	} else {
+
+	// resources with max severity set to "none" are always skipped, this
+	// semantics must not change. Skipped violations (skip rules) are reported
+	// as skipped regardless of the severity threshold.
+	if isSkipped || strings.EqualFold(resource.MaxSeverity, "none") {
 		violation.Comment = skipComment
 		e.results.ViolationStore.AddResult(&violation, true)
+		return
 	}
+
+	// --severity is a threshold on the violations actually reported; apply it
+	// to the effective severity, i.e. after the resource level min/max severity
+	// overrides above. A violation filtered out here must not be part of the
+	// violations list, the scan summary or the violated policies count.
+	if len(e.severity) > 0 && !utils.CheckSeverity(violation.Severity, e.severity) {
+		return
+	}
+
+	severity := violation.Severity
+	switch strings.ToLower(severity) {
+	case "high":
+		e.results.ViolationStore.Summary.HighCount++
+	case "medium":
+		e.results.ViolationStore.Summary.MediumCount++
+	case "low":
+		e.results.ViolationStore.Summary.LowCount++
+	default:
+		zap.S().Warn("invalid severity found in rule definition",
+			zap.String("rule id", violation.RuleID), zap.String("severity", severity))
+	}
+	e.results.ViolationStore.AddResult(&violation, false)
+	e.results.ViolationStore.Summary.ViolatedPolicies++
 }
 
 // reportPassed Adds a passed rule which wasn't violated by all the resources

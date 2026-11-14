@@ -39,4 +39,9 @@ type Engine struct {
 	regoFileMap map[string][]byte
 	regoDataMap map[string]*policy.RegoData
 	stats       EngineStats
+	// severity is the minimum severity of the violations that should be
+	// reported. It is applied to the violation's effective severity, i.e.
+	// after resource level min/max severity overrides. An empty string means
+	// that all violations are reported.
+	severity string
 }

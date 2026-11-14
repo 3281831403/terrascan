@@ -1,0 +1,15 @@
+{
+    "name": "lowSeverityViolation",
+    "file": "lowSeverityViolation.rego",
+    "template_args": {
+        "prefix": ""
+    },
+    "severity": "LOW",
+    "description": "test rule with low severity",
+    "reference_id": "TEST.Severity.Low.0001",
+    "category": "Testing",
+    "version": 1,
+    "id": "AC_TEST_LOW_0001",
+    "policy_type": "aws",
+    "resource_type": "severity_test_resource"
+}

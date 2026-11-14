@@ -115,7 +115,12 @@ func (c CategoryFilterSpecification) IsSatisfied(r *policy.RegoMetadata) bool {
 	return utils.CheckCategory(r.Category, c.categories)
 }
 
-// SeverityFilterSpecification is severity based Filter Spec
+// SeverityFilterSpecification is severity based Filter Spec.
+// It is retained for compatibility but is no longer wired into the pre load
+// filter: the --severity threshold must be applied to a violation's effective
+// severity (after resource level min/max severity overrides), so filtering by
+// the rule's metadata severity at load time would give wrong results for
+// resources carrying #ts:minseverity / #ts:maxseverity annotations.
 type SeverityFilterSpecification struct {
 	severity string
 }

@@ -31,7 +31,11 @@ type RegoMetadataPreLoadFilter struct {
 	filterSpecs []policy.FilterSpecification
 }
 
-// NewRegoMetadataPreLoadFilter is a constructor func for RegoMetadataPreLoadFilter
+// NewRegoMetadataPreLoadFilter is a constructor func for RegoMetadataPreLoadFilter.
+// The severity value is not used while loading policies anymore: severity is a
+// threshold on the violations actually reported, whose severity can be changed
+// by resource level min/max severity overrides. It is stored so that the policy
+// engine can apply it after evaluating every resource.
 func NewRegoMetadataPreLoadFilter(scanRules, skipRules, categories, policyTypes []string, severity string) *RegoMetadataPreLoadFilter {
 	return &RegoMetadataPreLoadFilter{
 		scanRules:   scanRules,
@@ -43,10 +47,15 @@ func NewRegoMetadataPreLoadFilter(scanRules, skipRules, categories, policyTypes 
 		filterSpecs: []policy.FilterSpecification{
 			ReferenceIDsFilterSpecification{scanRules},
 			CategoryFilterSpecification{categories: categories},
-			SeverityFilterSpecification{severity: severity},
 			PolicyTypesFilterSpecification{policyTypes: policyTypes},
 		},
 	}
+}
+
+// Severity returns the minimum severity of violations that should be
+// reported. An empty string means that all violations are reported.
+func (r *RegoMetadataPreLoadFilter) Severity() string {
+	return r.severity
 }
 
 // IsFiltered checks whether a RegoMetadata should be filtered or not

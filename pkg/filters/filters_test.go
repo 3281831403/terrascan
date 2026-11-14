@@ -160,6 +160,8 @@ func TestRegoMetadataPreLoadFilterIsAllowed(t *testing.T) {
 			want: true,
 		},
 		{
+			// severity is not a pre load filter anymore: it is applied on the
+			// effective violation severity after resource level overrides
 			name: "only severity specified, regometadata severity doesn't match",
 			fields: fields{
 				severity: utils.HighSeverity,
@@ -169,7 +171,7 @@ func TestRegoMetadataPreLoadFilterIsAllowed(t *testing.T) {
 					Severity: utils.LowSeverity,
 				},
 			},
-			want: false,
+			want: true,
 		},
 		{
 			name: "only severity specified, regometadata severity matches one of the severity specified",
@@ -249,6 +251,33 @@ func TestRegoMetadataPreLoadFilterIsAllowed(t *testing.T) {
 			r := NewRegoMetadataPreLoadFilter(tt.fields.scanRules, nil, tt.fields.categories, tt.fields.policyTypes, tt.fields.severity)
 			if got := r.IsAllowed(tt.args.regoMetadata); got != tt.want {
 				t.Errorf("RegoMetadataPreLoadFilter.IsAllowed() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRegoMetadataPreLoadFilterSeverity(t *testing.T) {
+	tests := []struct {
+		name     string
+		severity string
+		want     string
+	}{
+		{
+			name:     "no severity specified",
+			severity: "",
+			want:     "",
+		},
+		{
+			name:     "high severity specified",
+			severity: utils.HighSeverity,
+			want:     utils.HighSeverity,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := NewRegoMetadataPreLoadFilter(nil, nil, nil, nil, tt.severity)
+			if got := r.Severity(); got != tt.want {
+				t.Errorf("Severity() = %v, want %v", got, tt.want)
 			}
 		})
 	}

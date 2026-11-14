@@ -17,6 +17,7 @@
 package scan_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 
@@ -24,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
+	"github.com/tenable/terrascan/pkg/policy"
 	scanUtils "github.com/tenable/terrascan/test/e2e/scan"
 	"github.com/tenable/terrascan/test/helper"
 )
@@ -376,6 +378,80 @@ var _ = Describe("Scan command with rule filtering options", func() {
 			It("should give violations for the resource and exit with status code 3", func() {
 				scanArgs := []string{"-p", policyDir, "-i", "docker", "-d", iacDir, "-o", "json"}
 				scanUtils.RunScanAndAssertJSONOutput(terrascanBinaryPath, filepath.Join(resourcePrioritisingGoldenRelPath, "min_severity_set", "docker", "dockerfile_min_severity_high.txt"), helper.ExitCodeThree, false, true, outWriter, errWriter, scanArgs...)
+			})
+		})
+
+		// the --severity threshold is applied to the effective violation
+		// severity, i.e. after resource level min/max severity overrides
+		Describe("severity threshold combined with resource level severity overrides", func() {
+			Context("resource min severity set to High and --severity high", func() {
+				It("should report the lifted violations as high and exit with status code 3", func() {
+					iacDir := filepath.Join(resourcePrioritisingIacRelPath, "min_severity_set", "terraform")
+					scanArgs := []string{scanUtils.ScanCommand, "-p", policyDir, "-i", "terraform", "-d", iacDir, "-o", "json", "--severity", "high"}
+					session = helper.RunCommand(terrascanBinaryPath, outWriter, errWriter, scanArgs...)
+					Eventually(session, scanUtils.ScanTimeout).Should(gexec.Exit(helper.ExitCodeThree))
+
+					var engineOutput policy.EngineOutput
+					Expect(json.Unmarshal(session.Wait().Out.Contents(), &engineOutput)).NotTo(HaveOccurred())
+					Expect(engineOutput.ViolationStore.Summary.ViolatedPolicies).To(Equal(2))
+					Expect(engineOutput.ViolationStore.Summary.HighCount).To(Equal(2))
+					Expect(engineOutput.ViolationStore.Summary.MediumCount).To(BeZero())
+					Expect(engineOutput.ViolationStore.Summary.LowCount).To(BeZero())
+					Expect(engineOutput.ViolationStore.Violations).To(HaveLen(2))
+					for _, v := range engineOutput.ViolationStore.Violations {
+						Expect(v.Severity).To(Equal("HIGH"))
+					}
+				})
+			})
+
+			Context("resource max severity set to Low and --severity high", func() {
+				It("should not report the capped violations and exit with status code 0", func() {
+					iacDir := filepath.Join(resourcePrioritisingIacRelPath, "max_severity_set", "terraform")
+					scanArgs := []string{scanUtils.ScanCommand, "-p", policyDir, "-i", "terraform", "-d", iacDir, "-o", "json", "--severity", "high"}
+					session = helper.RunCommand(terrascanBinaryPath, outWriter, errWriter, scanArgs...)
+					Eventually(session, scanUtils.ScanTimeout).Should(gexec.Exit(helper.ExitCodeZero))
+
+					var engineOutput policy.EngineOutput
+					Expect(json.Unmarshal(session.Wait().Out.Contents(), &engineOutput)).NotTo(HaveOccurred())
+					Expect(engineOutput.ViolationStore.Summary.ViolatedPolicies).To(BeZero())
+					Expect(engineOutput.ViolationStore.Summary.HighCount).To(BeZero())
+					Expect(engineOutput.ViolationStore.Summary.MediumCount).To(BeZero())
+					Expect(engineOutput.ViolationStore.Summary.LowCount).To(BeZero())
+					Expect(engineOutput.ViolationStore.Violations).To(BeEmpty())
+				})
+			})
+
+			Context("resource max severity set to Low and no severity threshold", func() {
+				It("should report the capped violations as low and exit with status code 3", func() {
+					iacDir := filepath.Join(resourcePrioritisingIacRelPath, "max_severity_set", "terraform")
+					scanArgs := []string{scanUtils.ScanCommand, "-p", policyDir, "-i", "terraform", "-d", iacDir, "-o", "json"}
+					session = helper.RunCommand(terrascanBinaryPath, outWriter, errWriter, scanArgs...)
+					Eventually(session, scanUtils.ScanTimeout).Should(gexec.Exit(helper.ExitCodeThree))
+
+					var engineOutput policy.EngineOutput
+					Expect(json.Unmarshal(session.Wait().Out.Contents(), &engineOutput)).NotTo(HaveOccurred())
+					Expect(engineOutput.ViolationStore.Summary.ViolatedPolicies).To(Equal(2))
+					Expect(engineOutput.ViolationStore.Summary.LowCount).To(Equal(2))
+					Expect(engineOutput.ViolationStore.Violations).To(HaveLen(2))
+					for _, v := range engineOutput.ViolationStore.Violations {
+						Expect(v.Severity).To(Equal("LOW"))
+					}
+				})
+			})
+
+			Context("resource max severity set to none and --severity high", func() {
+				It("should keep skipping all violations and exit with status code 0", func() {
+					iacDir := filepath.Join(resourcePrioritisingIacRelPath, "max_severity_set_none", "terraform")
+					scanArgs := []string{scanUtils.ScanCommand, "-p", policyDir, "-i", "terraform", "-d", iacDir, "-o", "json", "--severity", "high"}
+					session = helper.RunCommand(terrascanBinaryPath, outWriter, errWriter, scanArgs...)
+					Eventually(session, scanUtils.ScanTimeout).Should(gexec.Exit(helper.ExitCodeZero))
+
+					var engineOutput policy.EngineOutput
+					Expect(json.Unmarshal(session.Wait().Out.Contents(), &engineOutput)).NotTo(HaveOccurred())
+					Expect(engineOutput.ViolationStore.Summary.ViolatedPolicies).To(BeZero())
+					Expect(engineOutput.ViolationStore.Violations).To(BeEmpty())
+					Expect(engineOutput.ViolationStore.SkippedViolations).To(HaveLen(2))
+				})
 			})
 		})
 	})

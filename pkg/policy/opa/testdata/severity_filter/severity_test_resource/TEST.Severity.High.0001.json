@@ -1,0 +1,15 @@
+{
+    "name": "highSeverityViolation",
+    "file": "highSeverityViolation.rego",
+    "template_args": {
+        "prefix": ""
+    },
+    "severity": "HIGH",
+    "description": "test rule with high severity",
+    "reference_id": "TEST.Severity.High.0001",
+    "category": "Testing",
+    "version": 1,
+    "id": "AC_TEST_HIGH_0001",
+    "policy_type": "aws",
+    "resource_type": "severity_test_resource"
+}

@@ -1,0 +1,15 @@
+{
+    "name": "mediumSeverityViolation",
+    "file": "mediumSeverityViolation.rego",
+    "template_args": {
+        "prefix": ""
+    },
+    "severity": "MEDIUM",
+    "description": "test rule with medium severity",
+    "reference_id": "TEST.Severity.Medium.0001",
+    "category": "Testing",
+    "version": 1,
+    "id": "AC_TEST_MEDIUM_0001",
+    "policy_type": "aws",
+    "resource_type": "severity_test_resource"
+}
